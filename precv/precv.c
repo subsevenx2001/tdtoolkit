@@ -111,14 +111,17 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header,
 	dst.sin_family = AF_INET;
 	dst.sin_addr = src_ip;
 	setsockopt(sockfd,SOL_SOCKET,SO_RCVBUF,&recvbuf_size,sizeof(recvbuf_size));
-	t_recv = (struct timeval*)ptr_icmp->icmp_data;
-	gettimeofday(t_recv,NULL);
-	//printf("%ld\n%ld\n",t_recv->tv_sec,t_recv->tv_usec);
+	//t_recv = (struct timeval*)ptr_icmp->icmp_data;
+	//gettimeofday(t_recv,NULL);
+	//if(*icmpid != ((struct icmp*)(packet+SIZE_ETHERNET+SIZE_IP))->icmp_id){
+	//	printf("Warning: not aligned!%x %x\n",icmpid,  ((struct icmp*)(packet+SIZE_ETHERNET+SIZE_IP))->icmp_id);
+	//}
+	memcpy(ptr_icmp->icmp_data,((struct icmp*)(packet+SIZE_ETHERNET+SIZE_IP))->icmp_data,sizeof(struct timeval));
 	int err = sendto(sockfd,ptr_icmp,64,0,(struct sockaddr *)&dst,sizeof(dst));
 	if(err < 0 ){
 		printf("Sendto failure, Code %d: %s\n",err,strerror(err));
 	}
-	printf("FROM: %s, SEQ: %d\n",inet_ntoa(src_ip),__bswap_16(*seq));
+	printf("FROM: %s, SEQ: %d,icmp_data offset=%d\n",inet_ntoa(src_ip),__bswap_16(*seq),((uint8_t*)ptr_icmp->icmp_data-(uint8_t*)ptr_icmp));
 }
 
 
@@ -139,7 +142,7 @@ int main(int argc, char *argv[]){
 	}
 	printf("Device: %s\n", dev);
 
-	handle = pcap_open_live(dev, BUFSIZ, 0, 500, errbuf);
+	handle = pcap_open_live(dev, BUFSIZ, 0, 10, errbuf);
     if (handle == NULL) {
 		 fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
 		 return(2);
