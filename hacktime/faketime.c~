@@ -101,7 +101,7 @@ void update_tdf(){
         return;
     }
 
-    orig_gettimeofday(&zero_time,NULL);
+    orig_gettimeofday(&zerotime,NULL);
     printf("TDF=%d\n",new_tdf);
     tdf=new_tdf;
    
