@@ -1,7 +1,20 @@
 #define _GNU_SOURCE
-#include <sys/time.h>
-#include <dlfcn.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <dlfcn.h>
+#include <errno.h>
+
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/time.h>
+
+#include "common.h"
+
 
 #define DILATION_RATE 2
 struct timeval zero_time = {0,0};
@@ -21,11 +34,30 @@ int new_tdf = 1;
 
 void update_tdf();
 
+key_t mqkey;
+int mqid;
+
+MSG_BUF msg;
+
 static void mtrace_init(void){
 	printf("overriding time\n");
         orig_gettimeofday = dlsym(RTLD_NEXT,"gettimeofday");
         orig_gettimeofday(&zero_time,NULL);
         printf("Zero Time:\nsec=%ld\nusec=%ld\n",zero_time.tv_sec,zero_time.tv_usec);
+
+	mqkey = ftok(TDT_FNAME,TDT_ID);
+ 	if(mqkey==-1){
+        	printf("ftok error\n");
+		//return -1;
+	}
+
+	mqid = msgget(mqkey, 0);
+	if(mqid == -1){
+		printf("msgget error\n");
+		//return -1;
+    	}
+	printf("mqid = %d\n",mqid);
+
 }
 
 void timeval_normalize(struct timeval* tv){
@@ -86,16 +118,23 @@ int gettimeofday(struct timeval *tv,struct timezone *tz){
     tv->tv_usec+=zero_time.tv_usec;
     timeval_normalize(tv);
  
-
-
     return 0;
 
 }
 
+
+
 void update_tdf(){
 
-    fp = fopen("/lib/tdf.txt","r");
-    fscanf(fp,"%d",&new_tdf);
+    if(msgrcv(mqid,&msg,sizeof(int),CONTROLLER,IPC_NOWAIT) !=-1){
+    	new_tdf = msg.tdf;
+    }else{
+	//printf("msgrcv %s\n",strerror(errno));
+    }
+    if(new_tdf<1){
+	printf("warning: illegal tdf\n");
+        new_tdf = 1;
+    }
     if(tdf==new_tdf){
         return;
     }
@@ -104,7 +143,7 @@ void update_tdf(){
     printf("TDF=%d\n",new_tdf);
     tdf=new_tdf;
    
-    fclose(fp);    
+       
 
 }
 
@@ -121,12 +160,4 @@ void update_tdf(){
 
 
 
-/*void _init(void){
-    printf("overriding time\n");
-    orig_gettimeofday = dlsym(RTLD_NEXT,"gettimeofday");
-    orig_gettimeofday(&zero_time,NULL);
-    printf("Zero Time:\nsec=%ld\nusec=%ld\n",zero_time.tv_sec,zero_time.tv_usec);
-    //printf("TDF=%d\n",DILATION_RATE);
-    //orig_time = dlsym(RTLD_NEXT, "time");
-    //ztime = orig_time(NULL);
-}*/
+
