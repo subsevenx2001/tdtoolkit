@@ -1,0 +1,197 @@
+//using namespace std
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include <pcap.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <netinet/ip_icmp.h>   //Provides declarations for icmp header
+#include <netinet/udp.h>   //Provides declarations for udp header
+#include <netinet/tcp.h>   //Provides declarations for tcp header
+#include <netinet/ip.h>    //Provides declarations for ip header
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <arpa/inet.h>
+
+
+#include "remote_master.h"
+
+/*
+*
+*Time dilation Factor
+*
+*/
+int tdf = 1;
+int new_tdf = 1;
+
+/*
+*
+*Fake systemcalls to controll remote VM nodes
+*
+*/
+int fake_gettimeofday(struct timeval *tv, void *tv1);
+int fake_time(time_t *time);
+int fake_ftime(struct timeb *tb);
+int fake_clock_gettime(clockid_t clk_id, struct timespec *p);
+
+/*
+*
+*Socket map for multiple connections
+*
+*/
+
+//map<struct in_addr, int> ipmap;
+
+/*
+*
+*Utilities
+*
+*/
+
+int getDeviceIP(char *dev_name){
+
+    int fd;
+    struct ifreq ifr;
+    fd = socket(AF_INET, SOCK_DGRAM,0);
+    ifr.ifr_addr.sa_family = AF_INET;
+
+    strncpy(ifr.ifr_name, dev_name, IFNAMSIZ-1);
+
+    ioctl(fd, SIOCGIFADDR, &ifr);
+
+    close(fd);
+
+    printf("Local IP: %s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+
+    return ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
+}
+
+inline void timeval_diff(struct timeval *tv1, struct timeval *tv2){
+    tv1->tv_sec-=tv2->tv_sec;
+    tv1->tv_usec-=tv2->tv_usec;
+}
+inline void timeval_normalize(struct timeval *tv){
+    while(tv->tv_usec>=1000000){
+        tv->tv_sec++;
+        tv->tv_usec-=10000000;
+    }
+
+    while(tv->tv_usec<0){
+        tv->tv_sec--;
+        tv->tv_usec+=1000000;
+    }
+}
+
+
+
+/*
+*
+*Global variables for fake_gettimeoafday
+*
+*/
+struct timeval *fake_current_time=NULL;
+struct timeval *ref_time=NULL;
+
+
+/*
+*
+*Fake time syscalls implementaitons
+*
+*/
+int fake_gettimeofday(struct timeval *tv, void *tvi){
+
+    struct timeval realtime;
+
+    if(fake_current_time==NULL){//If fake_current_time not set, means first call
+        fake_current_time = (struct timeval*)malloc(sizeof(struct timeval));
+        gettimeofday(fake_current_time,NULL);
+    }
+
+    gettimeofday(&realtime,tvi);
+    timeval_diff(&realtime,ref_time);    
+
+    tv->tv_sec = fake_current_time->tv_sec + realtime.tv_sec/tdf;
+    tv->tv_usec = fake_current_time->tv_usec + realtime.tv_usec/tdf; 
+
+    timeval_normalize(tv);
+    memcpy(fake_current_time, tv, sizeof(struct timeval)); //Newly gernerated fake timeval will be fake_current_time in next call
+
+    //struct timeval *ans;
+    //memcpy(ans, tv, sizeof(struct timeval));
+
+    return 1;
+
+}
+
+/*
+*
+*Other fake syscalls: to be implemented
+*
+*/
+
+/*
+*
+*Request process callback function
+*
+*/
+void process_request(u_char *args, const struct pcap_pkthdr *header, const u_char *packet){
+    struct in_addr src_ip = (struct sniff_ip*)(packet+SIZE_ETHERNET)->ip_src; //Get Request IP
+    printf("Request Received from %s\n",htoa(src_ip));
+    REQ *req = (REQ*)(packet+SIZE_ETHERNET+SIZE_IP_HEADER+SIZE_TCP_HEADER);
+    
+
+    switch(req->type){
+        case TYPE_GETTIMEOFDAY:
+            struct timeval *tv = (struct timeval*)(req)->payload;
+            fake_gettimeofday(tv,NULL); 
+            break;
+    }
+    
+
+}
+
+/*
+*
+*Entry point -- Main loop
+*
+*/
+
+int main(int argc, char *argv[]){
+
+    char *dev, errbuf[PCAP_ERRBUF_SIZE];
+    pcap_t *pcap_handle;
+    struct bpf_program fp;
+    char filter[] = "port 64646";  
+
+    if(argc>=2){
+        dev = argv[1];
+    }else{
+        dev = pcap_lookupdev(errbuf);
+    }
+    if(dev == NULL){
+        fprintf(stderr, "Can't fetch device: %s\n",errbuf);
+        return -1;
+    }
+    printf("Listen Device: %s\n",dev);
+
+    pcap_handle = pcap_open_live(dev, BUFSIZ, 1, 1, errbuf);
+    if(pcap_handle == NULL){
+         fprintf(stderr,"Can't open device: %s",errbuf);
+        return -2;
+    }
+    if(pcap_compile(pcap_handle, &fp, filter, 0, getDeviceIP(dev)) == -1){
+         fprintf(stderr, "Incorrect Filter: %s\n",pcap_geterr(pcap_handle));
+         return -3;
+    }
+    if(pcap_setfilter(pcap_handle, &fp) == -1){
+        fprintf(stderr, "Can't set filter: %s\n",pcap_geterr(pcap_handle));
+    }
+
+    pcap_dispatch(pcap_handle, -1, process_request,NULL);
+
+
+    return 0;
+
+}

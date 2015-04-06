@@ -56,7 +56,6 @@ int gettimeofday(struct timeval *tv, struct timezone *tz){
         return orig_gettimeofday(tv,tz);
     }
     memcpy(tv, (msg.content+4), sizeof(struct timeval));
-    orig_gettimeofday(NULL,tz);
     //printf("%ld %ld\n",tv->tv_sec, tv->tv_usec);    
 
     return 1;
