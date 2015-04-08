@@ -10,18 +10,22 @@
 
 /*
 *
-*Time dilation Factor
+*Time dilation Factor data format
 *
 */
-int tdf = 1;
-int new_tdf = 1;
+struct tdf_data{
+    int tdf;
+    int new_tdf;
+};
+//int tdf = 1;
+//static int new_tdf = 1;
 
 /*
 *
 *Fake systemcalls to controll remote VM nodes
 *
 */
-int fake_gettimeofday(struct timeval *tv, void *tv1);
+int fake_gettimeofday(struct timeval *tv, void *tv1, struct tdf_data *data);
 int fake_time(time_t *time);
 //int fake_ftime(struct timeb *tb);
 int fake_clock_gettime(clockid_t clk_id, struct timespec *p);
@@ -84,40 +88,48 @@ void timeval_normalize(struct timeval *tv){
 *Global variables for fake_gettimeoafday
 *
 */
-struct timeval *fake_current_time=NULL;
-struct timeval *ref_time=NULL;
+struct timeval *tdf_start_time=NULL;
+struct timeval *tdf_ref_time=NULL;
+struct timeval *tdf_current_time=NULL;
 
+void update_tdf(struct tdf_data *data){
 
+    if(data->tdf==data->new_tdf){
+        return;
+    }
+  
+    memcpy(tdf_start_time, tdf_current_time, sizeof(struct timeval));
+    gettimeofday(tdf_ref_time,NULL);
+    data->tdf = data->new_tdf;
+}
 
 /*
 *
 *Fake time syscalls implementaitons
 *
 */
-int fake_gettimeofday(struct timeval *tv, void *tvi){
+int fake_gettimeofday(struct timeval *tv, void *tvi, struct tdf_data *data){
 
     struct timeval realtime;
 
-    if(fake_current_time==NULL){//If fake_current_time not set, means first call
+    if(tdf_start_time==NULL){//If tdf_start_time not set, means first call
         printf("Init fake time\n");
-        fake_current_time = (struct timeval*)malloc(sizeof(struct timeval));
-        ref_time = (struct timeval*)malloc(sizeof(struct timeval));
-        gettimeofday(fake_current_time,NULL);
-        gettimeofday(ref_time,NULL);
+        tdf_start_time = (struct timeval*)malloc(sizeof(struct timeval));
+        tdf_ref_time = (struct timeval*)malloc(sizeof(struct timeval));
+        tdf_current_time = (struct timeval*)malloc(sizeof(struct timeval));
+        gettimeofday(tdf_start_time,NULL);
+        gettimeofday(tdf_ref_time,NULL);
+        gettimeofday(tdf_current_time,NULL);
     }
+    update_tdf(data);
 
     gettimeofday(&realtime,(struct timezone*)tvi);
-    timeval_diff(&realtime,ref_time);    
+    timeval_diff(&realtime,tdf_ref_time);    
 
-    tv->tv_sec = fake_current_time->tv_sec + realtime.tv_sec/tdf;
-    tv->tv_usec = fake_current_time->tv_usec + realtime.tv_usec/tdf; 
+    tv->tv_sec = tdf_start_time->tv_sec + realtime.tv_sec/data->tdf;
+    tv->tv_usec = tdf_start_time->tv_usec + realtime.tv_usec/data->tdf; 
     timeval_normalize(tv);
-    memcpy(fake_current_time, tv, sizeof(struct timeval)); //Newly gernerated fake timeval will be fake_current_time in next call
-    struct timeval test_tv;
-    gettimeofday(&test_tv,NULL);
-    printf("%ld, %ld\n",test_tv.tv_sec, test_tv.tv_usec);
-    //struct timeval *ans;
-    //memcpy(ans, tv, sizeof(struct timeval));
+    memcpy(tdf_current_time, tv, sizeof(struct timeval));
 
     return 1;
 
@@ -253,17 +265,29 @@ void* process_function_request(void *arg){
                     int command = *(int*)buffer;
                     if(command == TYPE_GETTIMEOFDAY){
                         struct timeval tv;
-                        fake_gettimeofday(&tv, NULL);
-                        //printf("%ld %ld\n",tv.tv_sec, tv.tv_usec);
+                        fake_gettimeofday(&tv, NULL, (struct tdf_data*)arg);
                         memcpy(buffer+4, &tv, sizeof(struct timeval));
-                        send(client_sock_array[i], buffer, REQUEST_LENGTH,0);
+                    }else if(command == TYPE_TDF){
+                        memcpy(buffer+4, &(((struct tdf_data*)arg)->tdf), sizeof(int));
                     }
+                    send(client_sock_array[i], buffer, REQUEST_LENGTH,0);
                 }
             }
         }
 
     }
     close(server_sock);
+
+    return NULL;
+}
+
+void* change_tdf(void* arg){
+
+    struct tdf_data *data = (struct tdf_data*)arg;
+
+    while(1){
+        scanf("%d",&(data->new_tdf));
+    }
 
     return NULL;
 }
@@ -305,10 +329,14 @@ int main(int argc, char *argv[]){
     if(pcap_setfilter(pcap_handle, &fp) == -1){
         fprintf(stderr, "Can't set filter: %s\n",pcap_geterr(pcap_handle));
     }
+ 
+    struct tdf_data tdf_info;
+    tdf_info.tdf = 1;
+    tdf_info.new_tdf=1;
 
-    pthread_t tid;
-    pthread_create(&tid, NULL,process_function_request, NULL);
-
+    pthread_t tid_request, tid_change_tdf;
+    pthread_create(&tid_request, NULL,process_function_request, &tdf_info);
+    pthread_create(&tid_change_tdf, NULL, change_tdf, &tdf_info);
 
 
     while(1){

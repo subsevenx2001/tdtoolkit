@@ -33,10 +33,12 @@
 #define SIZE_TCP_HEADER 20
 #define SIZE_UDP_HEADER 8
 
-#define REQUEST_LENGTH 512
+#define REQUEST_LENGTH 256
 
 #define TYPE_GREETING 10
+#define TYPE_TDF 9
 #define TYPE_GETTIMEOFDAY 1
+
 
 /*Macros for IPC*/
 #define MSG_NAME "/tmp"

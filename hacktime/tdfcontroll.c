@@ -110,10 +110,12 @@ int main(){
         //Send request
         if(send(server_sock, packet, REQUEST_LENGTH,0) == -1){
             printf("Send request error: %s\n",strerror(errno));
+            terminate_ipc(0);
             break;
         }
         if(recv(server_sock, packet, REQUEST_LENGTH, 0)==-1){
             printf("Receive answer error: %s\n",strerror(errno));
+            terminate_ipc(0);
             break;
         }
         //Tell hook the result
