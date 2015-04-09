@@ -103,7 +103,11 @@ int main(){
         }
         request_type = *(int*)(msg.content);
         *(int*)packet = request_type;
-
+        /*Dummy for test*/
+        //int x;
+        //scanf("%d",&x);
+        //*(int*)packet = TYPE_GETTIMEOFDAY;
+        //Send request
         if(send(server_sock, packet, REQUEST_LENGTH,0) == -1){
             printf("Send request error: %s\n",strerror(errno));
             terminate_ipc(0);

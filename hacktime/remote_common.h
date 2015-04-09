@@ -33,6 +33,8 @@
 #define SIZE_TCP_HEADER 20
 #define SIZE_UDP_HEADER 8
 
+#define TYPE_OFFSET 4
+#define COMMAND_OFFSET 8
 #define REQUEST_LENGTH 256
 
 #define TYPE_GREETING 10

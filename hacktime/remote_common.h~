@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <byteswap.h>
+#include <signal.h>
 #define REPLY_MAGIC_NUM 0xdeadfade
 #define REQ_PORT 64645
 #define COMM_PORT 64646
@@ -32,10 +33,13 @@
 #define SIZE_TCP_HEADER 20
 #define SIZE_UDP_HEADER 8
 
-#define REQUEST_LENGTH 512
+#define COMMAND_OFFSET 8
+#define REQUEST_LENGTH 256
 
 #define TYPE_GREETING 10
+#define TYPE_TDF 9
 #define TYPE_GETTIMEOFDAY 1
+
 
 /*Macros for IPC*/
 #define MSG_NAME "/tmp"

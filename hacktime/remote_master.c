@@ -175,7 +175,7 @@ void process_request(u_char *args, const struct pcap_pkthdr *header, const u_cha
     ip.s_addr = local_ip; 
     char buff[REQUEST_LENGTH];
     *(int*)buff = REPLY_MAGIC_NUM;
-    memcpy(buff+4, &ip, sizeof(struct in_addr));
+    memcpy(buff+COMMAND_OFFSET, &ip, sizeof(struct in_addr));
     //printf("IP info to send = %s\n",inet_ntoa(*(struct in_addr*)buff));
 
     if(sendto(client_sock, buff, REQUEST_LENGTH, 0, (struct sockaddr*)&client_addr, sizeof(client_addr))==-1){
@@ -266,9 +266,9 @@ void* process_function_request(void *arg){
                     if(command == TYPE_GETTIMEOFDAY){
                         struct timeval tv;
                         fake_gettimeofday(&tv, NULL, (struct tdf_data*)arg);
-                        memcpy(buffer+4, &tv, sizeof(struct timeval));
+                        memcpy(buffer+COMMAND_OFFSET, &tv, sizeof(struct timeval));
                     }else if(command == TYPE_TDF){
-                        memcpy(buffer+4, &(((struct tdf_data*)arg)->tdf), sizeof(int));
+                        memcpy(buffer+COMMAND_OFFSET, &(((struct tdf_data*)arg)->tdf), sizeof(int));
                     }
                     send(client_sock_array[i], buffer, REQUEST_LENGTH,0);
                 }

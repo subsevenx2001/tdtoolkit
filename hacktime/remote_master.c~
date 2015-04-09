@@ -98,8 +98,7 @@ void update_tdf(struct tdf_data *data){
         return;
     }
   
-    struct timeval tv;
-    memcpy(tdf_start_time, &tv, sizeof(struct timeval));
+    memcpy(tdf_start_time, tdf_current_time, sizeof(struct timeval));
     gettimeofday(tdf_ref_time,NULL);
     data->tdf = data->new_tdf;
 }
@@ -131,11 +130,6 @@ int fake_gettimeofday(struct timeval *tv, void *tvi, struct tdf_data *data){
     tv->tv_usec = tdf_start_time->tv_usec + realtime.tv_usec/data->tdf; 
     timeval_normalize(tv);
     memcpy(tdf_current_time, tv, sizeof(struct timeval));
-    //struct timeval test_tv;
-    //gettimeofday(&test_tv,NULL);
-    //printf("%ld, %ld\n",test_tv.tv_sec, test_tv.tv_usec);
-    //struct timeval *ans;
-    //memcpy(ans, tv, sizeof(struct timeval));
 
     return 1;
 
@@ -181,7 +175,7 @@ void process_request(u_char *args, const struct pcap_pkthdr *header, const u_cha
     ip.s_addr = local_ip; 
     char buff[REQUEST_LENGTH];
     *(int*)buff = REPLY_MAGIC_NUM;
-    memcpy(buff+4, &ip, sizeof(struct in_addr));
+    memcpy(buff+COMMAND_OFFSET, &ip, sizeof(struct in_addr));
     //printf("IP info to send = %s\n",inet_ntoa(*(struct in_addr*)buff));
 
     if(sendto(client_sock, buff, REQUEST_LENGTH, 0, (struct sockaddr*)&client_addr, sizeof(client_addr))==-1){
@@ -273,8 +267,10 @@ void* process_function_request(void *arg){
                         struct timeval tv;
                         fake_gettimeofday(&tv, NULL, (struct tdf_data*)arg);
                         memcpy(buffer+4, &tv, sizeof(struct timeval));
-                        send(client_sock_array[i], buffer, REQUEST_LENGTH,0);
+                    }else if(command == TYPE_TDF){
+                        memcpy(buffer+4, &(((struct tdf_data*)arg)->tdf), sizeof(int));
                     }
+                    send(client_sock_array[i], buffer, REQUEST_LENGTH,0);
                 }
             }
         }
