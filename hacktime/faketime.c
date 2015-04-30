@@ -9,6 +9,7 @@
 static int (*orig_gettimeofday)(struct timeval *tv,struct timezone *tz) = NULL;
 static unsigned int (*orig_sleep)(unsigned int seconds) = NULL;
 static int (*orig_usleep)(unsigned int micro_seconds) = NULL;
+static clock_t (*orig_clock)(void) = NULL;
 
 //Global variables for socket
 int server_sock = -1; 

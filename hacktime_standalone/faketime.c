@@ -18,6 +18,7 @@
 
 #define DILATION_RATE 2
 struct timeval zero_time = {0,0};
+struct timeval start_time = {0,0};
 time_t ztime;
 struct timeval prev  ={0,0};
 
@@ -30,7 +31,7 @@ time_t (*orig_time)(time_t* timer);
 FILE *fp=NULL;
 int tdf = 1;
 int new_tdf = 1;
-;
+int is_updating=0;
 
 void update_tdf();
 
@@ -43,6 +44,7 @@ static void mtrace_init(void){
 	printf("overriding time\n");
         orig_gettimeofday = dlsym(RTLD_NEXT,"gettimeofday");
         orig_gettimeofday(&zero_time,NULL);
+	orig_gettimeofday(&start_time,NULL);
         printf("Zero Time:\nsec=%ld\nusec=%ld\n",zero_time.tv_sec,zero_time.tv_usec);
 
 	mqkey = ftok(TDT_FNAME,TDT_ID);
@@ -94,9 +96,29 @@ void print_tv_diff(struct timeval *tv1, struct timeval *tv2){
 
 }
 
+static int __gettimeofday_noupdate(struct timeval *tv,struct timezone *tz){
+
+    struct timeval real_tv;
+
+    if(orig_gettimeofday == NULL){
+	mtrace_init();
+    }
+
+    orig_gettimeofday(&real_tv,NULL);
+
+   
+    tv->tv_sec = start_time.tv_sec + (real_tv.tv_sec-zero_time.tv_sec)/tdf; 
+    tv->tv_usec = start_time.tv_usec + (real_tv.tv_usec-zero_time.tv_usec)/tdf;
+    timeval_normalize(tv);
+ 
+    return 0;
+
+}
 
 
 int gettimeofday(struct timeval *tv,struct timezone *tz){
+
+    struct timeval real_tv;
 
     if(orig_gettimeofday == NULL){
 	mtrace_init();
@@ -105,17 +127,11 @@ int gettimeofday(struct timeval *tv,struct timezone *tz){
     update_tdf();
    
 
-    orig_gettimeofday(tv,tz);
+    orig_gettimeofday(&real_tv,NULL);
 
-    tv->tv_sec-=zero_time.tv_sec;
-    tv->tv_usec-=zero_time.tv_usec;
-    timeval_normalize(tv);
-    
-    tv->tv_sec/=tdf;
-    tv->tv_usec/=tdf;
-
-    tv->tv_sec+=zero_time.tv_sec;
-    tv->tv_usec+=zero_time.tv_usec;
+   
+    tv->tv_sec = start_time.tv_sec + (real_tv.tv_sec-zero_time.tv_sec)/tdf; 
+    tv->tv_usec = start_time.tv_usec + (real_tv.tv_usec-zero_time.tv_usec)/tdf;
     timeval_normalize(tv);
  
     return 0;
@@ -126,22 +142,38 @@ int gettimeofday(struct timeval *tv,struct timezone *tz){
 
 void update_tdf(){
 
-    if(msgrcv(mqid,&msg,sizeof(int),CONTROLLER,IPC_NOWAIT) !=-1){
-    	new_tdf = msg.tdf;
-    }else{
-	//printf("msgrcv %s\n",strerror(errno));
-    }
-    if(new_tdf<1){
-	printf("warning: illegal tdf\n");
-        new_tdf = 1;
-    }
-    if(tdf==new_tdf){
-        return;
-    }
+//    if(tdf == new_tdf){
+//        return;
+//    }
 
-    orig_gettimeofday(&zero_time,NULL);
-    printf("TDF=%d\n",new_tdf);
-    tdf=new_tdf;
+//    if(is_updating==1){
+//        return;
+//    }
+
+    if(msgrcv(mqid,&msg,sizeof(int),CONTROLLER,IPC_NOWAIT) !=-1){
+//        is_updating = 1;
+        if(tdf == msg.tdf){
+            return;
+        }
+        if(msg.tdf<1){
+	    printf("warning: illegal tdf\n");
+            new_tdf = tdf;
+            return;
+        }
+        __gettimeofday_noupdate(&start_time,NULL);
+        orig_gettimeofday(&zero_time,NULL);
+    	tdf = msg.tdf;
+        //printf("UPDATETEST\n");
+//        is_updating = 0;
+    }
+    
+//    if(tdf==new_tdf){
+ //       return;
+ //   }
+
+//    orig_gettimeofday(&zero_time,NULL);
+//    printf("TDF=%d\n",new_tdf);
+//    tdf=new_tdf;
    
        
 
