@@ -121,7 +121,7 @@ int fake_gettimeofday(struct timeval *tv, void *tvi, struct tdf_data *data){
         gettimeofday(tdf_ref_time,NULL);
         gettimeofday(tdf_current_time,NULL);
     }
-    update_tdf(data);
+    //update_tdf(data);
 
     gettimeofday(&realtime,(struct timezone*)tvi);
     timeval_diff(&realtime,tdf_ref_time);    
@@ -284,9 +284,16 @@ void* process_function_request(void *arg){
 void* change_tdf(void* arg){
 
     struct tdf_data *data = (struct tdf_data*)arg;
-
+    struct timeval tv;
+    int input = 0;
     while(1){
-        scanf("%d",&(data->new_tdf));
+        scanf("%d",&input);
+        if(input<1){
+            continue;
+        }
+        data->new_tdf = input;
+        fake_gettimeofday(&tv, NULL, data);
+        update_tdf(data);
     }
 
     return NULL;
