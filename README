@@ -1,0 +1,9 @@
+make
+sudo make install
+
+Run remote_master in one host
+Type "LD_PRELOAD=faketime.so <your program>" in another host
+Make sure they can connect to each other and within same LAN
+
+
+NOTE: To use it in Mininet, you have to input "route add default gw 10.0.0.1" to each host
