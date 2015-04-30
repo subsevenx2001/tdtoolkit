@@ -59,6 +59,7 @@ static void mtrace_init(void){
 		//return -1;
     	}
 	printf("mqid = %d\n",mqid);
+	tdf = DILATION_RATE;
 
 }
 
